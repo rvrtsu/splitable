@@ -45,10 +45,8 @@ ${tr.map((t,i)=>`<div class=paper><div class=row><span><b>${esc(nm(t.from))}</b>
 <div class=row style="margin-top:10px"><button class=btn data-act=settleup data-i=${i}>Settle up</button><button class="btn ghost" data-act=nudge data-i=${i}>Polite nudge</button></div></div>`).join('')||'<p class=mu>Nobody owes anything.</p>'}
 <div class=row><button class="btn ghost" data-act=share>Share summary</button><button class="btn ghost" data-act=roulette>Bill roulette</button></div>`};
 
-const vPeople=()=>`${Object.entries(mem()).map(([id,m])=>`<div class="paper row"><span>${esc(m.name)}${m.guest?' (guest)':''}${id===S.me?' (you)':''}</span>${m.qr?'<small class=mu>QR saved</small>':''}</div>`).join('')}
-<form class=paper data-form=guest><h3>Add a guest</h3><p class=mu>For friends without the app. You track their share for them.</p><input name=name placeholder="John" required><button class=btn>Add guest</button></form>
-<div class=paper><h3>Your payment QR</h3><p class=mu>Upload your GCash, Maya or bank QR so friends can pay you.</p><label class="btn ghost" for=qr>Upload QR</label><input id=qr type=file accept="image/*" hidden></div>
-<div class=paper><h3>Gemini API key</h3><p class=mu>Used for receipt scanning. Stays on this device.</p><input id=key type=password autocomplete=off placeholder="Paste your key" value="${esc(LS('key')||'')}"></div>`;
+const vPeople=()=>`${Object.entries(mem()).map(([id,m])=>`<div class="paper row"><span>${esc(m.name)}${m.guest?' (guest)':''}${id===S.me?' (you)':''}</span></div>`).join('')}
+<form class=paper data-form=guest><h3>Add a guest</h3><p class=mu>For friends without the app. You track their share for them.</p><input name=name placeholder="John" required><button class=btn>Add guest</button></form>`;
 
 const vGroup=()=>{const g=S.group;if(!g)return'<p class=mu>Loading group…</p>';
   const tr=settle(balances(S.receipts,S.payments),g.round);S.tr=tr;
@@ -121,8 +119,8 @@ const A={
     rustle();toast('Bill saved');go('group')},
   delbill:()=>{if(confirm('Delete this bill?')){F.delReceipt(S.code,S.draft.id);go('group')}},
   closemodal:()=>modal.classList.remove('on'),
-  settleup:b=>{const t=S.tr[b.dataset.i],q=mem()[t.to]?.qr;
-    openModal(`<h3>Pay ${esc(nm(t.to))}</h3><p class=big>${peso(t.amt,S.group.round)}</p>${q?`<img class=qr src="${esc(q)}" alt="Payment QR">`:'<p class=mu>No QR saved yet. Ask them to upload one in People.</p>'}<br><button class=btn data-act=paid data-i=${b.dataset.i}>Mark as paid</button>`)},
+  settleup:b=>{const t=S.tr[b.dataset.i];
+    openModal(`<h3>${esc(nm(t.from))} pays ${esc(nm(t.to))}</h3><p class=big>${peso(t.amt,S.group.round)}</p><p class=mu>Send it by GCash, Maya or bank transfer, then mark it paid.</p><button class=btn data-act=paid data-i=${b.dataset.i}>Mark as paid</button>`)},
   paid:b=>{const t=S.tr[b.dataset.i];F.recordPayment(S.code,{from:t.from,to:t.to,amt:t.amt});ding();A.closemodal();toast('Marked as paid')},
   nudge:b=>{const t=S.tr[b.dataset.i];S.nd=t;
     openModal(`<h3>Nudge ${esc(nm(t.from))}</h3><div class=seg>${['funny','gentle','dramatic'].map((k,i)=>`<button class="${i?'':'on'}" data-act=tone data-k=${k}>${k[0].toUpperCase()+k.slice(1)}</button>`).join('')}</div><textarea id=nt rows=5>${esc(nudgeText(nm(t.from),peso(t.amt,S.group.round),'funny',S.group.name))}</textarea><button class=btn data-act=copynudge>Copy message</button>`)},
@@ -161,21 +159,16 @@ document.addEventListener('input',e=>{const t=e.target,d=S.draft;if(S.route!=='e
   if(t.dataset.f){d[t.dataset.f]=v;updTotals()}
   else if(t.dataset.k){d.items[t.dataset.i][t.dataset.k]=v;updTotals()}
   else if(t.dataset.w!=null&&S.sheet!=null){d.items[S.sheet].split.w[t.dataset.w]=v;updTotals()}});
-document.addEventListener('change',e=>{const t=e.target,f=t.files?.[0];
-  if(t.id==='key')LS('key',t.value.trim());
-  if(t.id==='scan'&&f)scan(f);
-  if(t.id==='qr'&&f){if(!navigator.onLine)return toast('Uploading needs internet.');toast('Uploading…');
-    F.uploadQR(S.code,S.me,f).then(()=>toast('QR saved'),()=>toast('Upload failed. Try again.'))}});
+document.addEventListener('change',e=>{const f=e.target.files?.[0];if(e.target.id==='scan'&&f)scan(f)});
 
 async function scan(file){
   if(!navigator.onLine)return toast('Scanning needs internet. Add items by hand and they will sync later.');
-  const key=LS('key');if(!key){S.tab='people';render();return toast('Add your Gemini API key first')}
   rustle();toast('Reading receipt…');
-  try{const r=await scanReceipt(file,key);
+  try{const r=await scanReceipt(file);
     newDraft({title:r.merchant||'',_sub:r.subtotal,tax:r.tax||0,service:r.service_charge||0,discount:r.discount||0,
       items:r.items.map(i=>({name:i.name,qty:i.qty||1,price:i.price||0,split:{mode:'equal',w:{}}}))});
     S.unfold=true;go('edit')}
-  catch{toast('Could not read that receipt. Retake the photo or add items by hand.')}}
+  catch(e){toast(e.message==='nokey'?'Add your Gemini key at the top of js/ai.js first.':'Could not read that receipt. Retake the photo or add items by hand.')}}
 
 /* boot */
 theme();net();addEventListener('online',net);addEventListener('offline',net);

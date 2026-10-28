@@ -1,22 +1,14 @@
 import{initializeApp}from'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import{initializeFirestore,persistentLocalCache,persistentMultipleTabManager,doc,collection,setDoc,getDoc,updateDoc,addDoc,deleteDoc,onSnapshot,query,orderBy}from'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import{getAuth,signInAnonymously}from'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
-import{getStorage,ref,uploadBytes,getDownloadURL}from'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js';
 
 // Paste your Firebase web app config here (Project settings > Your apps). It is safe to publish; your security rules protect the data.
-const firebaseConfig = {
-  apiKey: "AIzaSyC3SM2H8GIdBy1Qeqbl5YGKE_yXsmshsVc",
-  authDomain: "splitable-e6b18.firebaseapp.com",
-  projectId: "splitable-e6b18",
-  storageBucket: "splitable-e6b18.firebasestorage.app",
-  messagingSenderId: "915320395669",
-  appId: "1:915320395669:web:bf9921ca36f7b52330489c"
-};
+const firebaseConfig={apiKey:'YOUR_API_KEY',authDomain:'YOUR_PROJECT.firebaseapp.com',projectId:'YOUR_PROJECT',storageBucket:'YOUR_PROJECT.firebasestorage.app',messagingSenderId:'000000000000',appId:'1:000000000000:web:0000000000000000'};
 
 const app=initializeApp(firebaseConfig);
 // Offline cache: writes made without internet are stored on the device and sent automatically when you reconnect.
 const db=initializeFirestore(app,{localCache:persistentLocalCache({tabManager:persistentMultipleTabManager()}),ignoreUndefinedProperties:true});
-const auth=getAuth(app),storage=getStorage(app);
+const auth=getAuth(app);
 export const authReady=(async()=>{try{await auth.authStateReady();if(!auth.currentUser)await signInAnonymously(auth)}catch{}})();
 
 const uid=()=>'m'+Math.random().toString(36).slice(2,9);
@@ -40,11 +32,6 @@ export const setRound=(code,v)=>updateDoc(G(code),{round:v});
 export function saveReceipt(code,{id,...data}){const col=collection(G(code),'receipts'),r=id?doc(col,id):doc(col);setDoc(r,data);return r.id}
 export const delReceipt=(code,id)=>deleteDoc(doc(G(code),'receipts',id));
 export const recordPayment=(code,p)=>addDoc(collection(G(code),'payments'),{...p,ts:Date.now()});
-export async function uploadQR(code,id,file){
-  await authReady;const r=ref(storage,`qr/${code}/${id}`);
-  await uploadBytes(r,file,{contentType:file.type});
-  const url=await getDownloadURL(r);await updateDoc(G(code),{[`members.${id}.qr`]:url});return url;
-}
 export function watch(code,h){
   let u=[],dead=false;
   authReady.then(()=>{if(dead)return;const g=G(code),L=s=>s.docs.map(d=>({id:d.id,...d.data()}));

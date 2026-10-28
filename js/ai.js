@@ -1,3 +1,6 @@
+// Paste your Gemini key below (from aistudio.google.com/apikey).
+const API_KEY = "AQ.Ab8RN6JCndN6DJIScST8v4g_F--AotynxRLsNLFEf0YSIcwPJQ";
+
 // Receipt scanning with Gemini. Check Google AI Studio for the current model name if this one is retired.
 const MODEL='gemini-2.5-flash';
 
@@ -27,10 +30,11 @@ async function shrink(file,max=1600){
   return cv.toDataURL('image/jpeg',.85).split(',')[1];
 }
 
-export async function scanReceipt(file,key){
+export async function scanReceipt(file){
+  if(!API_KEY||API_KEY.startsWith('YOUR_'))throw new Error('nokey');
   const data=await shrink(file);
   const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,{
-    method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},
+    method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':API_KEY},
     body:JSON.stringify({contents:[{parts:[{text:RECEIPT_PROMPT},{inline_data:{mime_type:'image/jpeg',data}}]}],
       generationConfig:{temperature:0,responseMimeType:'application/json',responseSchema:SCHEMA}})});
   if(!res.ok)throw new Error('Gemini '+res.status);

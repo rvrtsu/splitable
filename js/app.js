@@ -23,6 +23,8 @@ const copy=async s=>{try{await navigator.clipboard.writeText(s)}catch{const a=do
 const theme=()=>{const t=LS('theme')||'';document.documentElement.dataset.theme=t;document.querySelector('meta[name=theme-color]').content=t?'#242220':'#F9F6F0'};
 const net=()=>document.body.classList.toggle('off',!navigator.onLine);
 const remember=(code,name,me)=>LS('groups',[{code,name,me},...(LS('groups')||[]).filter(x=>x.code!==code)]);
+const forget=code=>LS('groups',(LS('groups')||[]).filter(g=>g.code!==code));
+const ask=(title,text,label,fn)=>{S.ok=fn;openModal(`<h3>${title}</h3><p class=mu>${text}</p><div class=row2 style="margin-top:12px"><button class="btn ghost" data-act=closemodal>Cancel</button><button class="btn danger" data-act=yes>${label}</button></div>`)};
 const openModal=h=>{modal.innerHTML=`<div class=scrim data-act=closemodal></div><div class=card>${h}</div>`;modal.offsetHeight;modal.classList.add('on')};
 async function shrink(file,max=640){ // payment QR becomes a small picture saved in Firestore
   const b=await createImageBitmap(file),s=Math.min(1,max/Math.max(b.width,b.height)),cv=document.createElement('canvas');
@@ -36,7 +38,7 @@ const vSettings=()=>`<div class=paper><h3>App settings</h3>
 
 const vHome=()=>{const gs=LS('groups')||[],n=S.hm==='new';
   return`<h1>Receipt</h1><p class=mu>Split any bill fairly. No sign-up needed.</p>
-${gs.length?`<h3 class=sec>Your groups</h3>${gs.map(g=>`<button class="paper row full" data-act=open data-code=${g.code}><b>${esc(g.name)}</b><span class=mu>Code ${g.code}</span></button>`).join('')}`:''}
+${gs.length?`<h3 class=sec>Your groups</h3><div class=grid>${gs.map(g=>`<div class="paper row gcard"><button class=gopen data-act=open data-code=${g.code}><b>${esc(g.name)}</b><br><small class=mu>Code ${g.code}</small></button><button class=lnk data-act=forget data-code=${g.code}>Remove</button></div>`).join('')}</div>`:''}
 <div class=paper><div class=seg><button class="${n?'on':''}" data-act=hm data-k=new>New group</button><button class="${n?'':'on'}" data-act=hm data-k=join>Join a group</button></div>
 ${n?`<form data-form=create>
 <label>Group name<input name=name placeholder="Friday dinner" required></label>
@@ -49,14 +51,14 @@ ${n?`<form data-form=create>
 <button class="btn wide">Join group</button></form>`}</div>${vSettings()}`};
 
 const vBills=closed=>`${closed?'<div class=stamp>All paid</div>':'<button class="btn wide" data-act=newbill>+ Add a bill</button>'}
-${S.receipts.length?`<h3 class=sec>Bills</h3>${S.receipts.map(r=>`<button class="paper bill full" data-act=editbill data-id=${r.id}><b>${esc(r.title)}</b><b>${peso(receiptTotals(r).total)}</b><small class=mu>Paid by ${esc(nm(r.payer))}, ${r.items.length} item${r.items.length===1?'':'s'}</small></button>`).join('')}`
+${S.receipts.length?`<h3 class=sec>Bills</h3><div class=grid>${S.receipts.map(r=>`<button class="paper bill full" data-act=editbill data-id=${r.id}><b>${esc(r.title)}</b><b>${peso(receiptTotals(r).total)}</b><small class=mu>Paid by ${esc(nm(r.payer))}, ${r.items.length} item${r.items.length===1?'':'s'}</small></button>`).join('')}</div>`
 :`<div class=paper><h3>How it works</h3><ol class=steps><li>Add a bill and type in the items.</li><li>Tap the names of who shared each item.</li><li>Open Settle to see who pays whom.</li></ol></div>`}`;
 
 const vSettle=tr=>{const w=S.group.round,has=S.receipts.length;
   const head=!has?'Add a bill first, then come back here.':tr.length?`${tr.length} payment${tr.length>1?'s':''} settle${tr.length>1?'':'s'} everything`:'Everyone is settled up';
   return`<h3 class=sec>${head}</h3>
-${tr.map((t,i)=>`<div class=paper><div class=tx><span><b>${esc(nm(t.from))}</b> pays <b>${esc(nm(t.to))}</b></span><b class=amt>${peso(t.amt,w)}</b></div>
-<div class=row2><button class=btn data-act=settleup data-i=${i}>Pay</button><button class="btn ghost" data-act=nudge data-i=${i}>Send a reminder</button></div></div>`).join('')}
+<div class=grid>${tr.map((t,i)=>`<div class=paper><div class=tx><span><b>${esc(nm(t.from))}</b> pays <b>${esc(nm(t.to))}</b></span><b class=amt>${peso(t.amt,w)}</b></div>
+<div class=row2><button class=btn data-act=settleup data-i=${i}>Pay</button><button class="btn ghost" data-act=nudge data-i=${i}>Send a reminder</button></div></div>`).join('')}</div>
 ${has?`<div class=paper><div class=row><span>Round to whole pesos<br><small class=mu>Skips the centavos</small></span><button class="btn ghost sm" data-act=round>${onoff(w)}</button></div></div>
 <h3 class=sec>Extras</h3><div class=row2><button class="btn ghost" data-act=share>Save summary image</button><button class="btn ghost" data-act=roulette>Bill roulette</button></div>`:''}`};
 
@@ -66,6 +68,7 @@ ${Object.entries(mem()).map(([id,m])=>`<div class="paper row"><span>${esc(m.name
 <div class=paper><h3>Your payment QR</h3><p class=mu><small>Friends see it when they tap Pay. Use your GCash, Maya or bank QR.</small></p>
 ${S.myQR?`<img class=qr src="${S.myQR}" alt="Your payment QR">`:''}
 <label class="btn ghost wide" for=qr style="margin:12px 0 0">${S.myQR?'Replace QR':'Upload QR'}</label><input id=qr type=file accept="image/*" hidden></div>
+<div class=paper><h3>Group options</h3>${mem()[S.me]?.host?'<p class=mu><small>Deleting removes every bill and payment for everyone in the group.</small></p><button class="btn danger wide" data-act=delgroup>Delete group</button>':'<p class=mu><small>This only removes the group from this device. You can rejoin with the code.</small></p><button class="btn ghost wide" data-act=leave>Remove from my groups</button>'}</div>
 ${vSettings()}`;
 
 const vGroup=()=>{const g=S.group;if(!g)return'<p class=mu>Loading group…</p>';
@@ -85,7 +88,7 @@ const itemRow=(it,i)=>{const w=it.split.w,m=it.split.mode;
 <button class=lnk data-act=assign data-i=${i}>${m==='equal'?'Custom split':m==='pct'?'Edit % split':'Edit ₱ split'}</button></div></div>`};
 
 const vEdit=()=>{const d=S.draft;
-  return`<div class=hdr><button class="btn ghost sm" data-act=back>← Back</button><h2>${d.id?'Edit bill':'New bill'}</h2></div>
+  return`<div class=hdr><button class="btn ghost sm" data-act=back>← Back</button><h2>${d.id?'Edit bill':'New bill'}</h2>${d.id?'<button class="btn ghost sm danger-t" data-act=delbill>Delete</button>':''}</div>
 <div class=paper><label>What was it for?<input data-f=title placeholder="Dinner at Mang Inasal" value="${esc(d.title)}"></label>
 <label>Who paid the bill?<select data-f=payer>${Object.entries(mem()).map(([id,m])=>`<option value=${id} ${id===d.payer?'selected':''}>${esc(m.name)}</option>`).join('')}</select></label></div>
 <div class="paper ${S.unfold?'unfold':''}"><div class=row><h3>Items</h3><button class=lnk data-act=all>Everyone shares all</button></div>
@@ -93,7 +96,7 @@ const vEdit=()=>{const d=S.draft;
 ${d.items.map(itemRow).join('')}<button class="btn ghost" data-act=additem>+ Add item</button></div>
 <div class=paper><h3>Tax and fees</h3><p class=mu><small>Shared in proportion to what each person ordered.</small></p>
 ${[['tax','Tax'],['service','Service charge'],['discount','Discount']].map(([k,l])=>`<div class=row style="margin-top:8px"><span>${l}</span><input data-f=${k} type=number inputmode=decimal step=any placeholder="0" value="${d[k]||''}" style="width:110px;text-align:right" aria-label="${l}"></div>`).join('')}</div>
-${d.id?'<button class="btn ghost wide" data-act=delbill>Delete this bill</button>':''}
+${d.id?'<button class="btn ghost wide danger-t" data-act=delbill>Delete this bill</button>':''}
 <div class=bar><div><small class=mu id=warn>&nbsp;</small><b id=tot></b></div><button class=btn data-act=savebill>Save bill</button></div>`};
 
 const vSheet=()=>{const it=S.draft.items[S.sheet],sp=it.split,hint={equal:'Everyone you pick pays the same amount.',pct:'Type each person’s percent. For 70/30, enter 70 and 30.',exact:'Type how many pesos each person pays.'}[sp.mode];
@@ -118,9 +121,9 @@ function newDraft(o={}){S.draft={title:'',payer:S.me,items:[],tax:'',service:'',
 const rebalance=it=>{const sp=it.split,ids=Object.keys(sp.w),n=ids.length||1,t=it.qty*it.price;
   ids.forEach(id=>sp.w[id]=sp.mode==='equal'?1:+(sp.mode==='pct'?100/n:t/n).toFixed(2))};
 
-function openGroup(code){S.unsub?.();Object.assign(S,{code,group:null,receipts:[],payments:[],tab:'bills',myQR:null,me:(LS('groups')||[]).find(g=>g.code===code)?.me});
+function openGroup(code){S.unsub?.();Object.assign(S,{code,deleting:false,group:null,receipts:[],payments:[],tab:'bills',myQR:null,me:(LS('groups')||[]).find(g=>g.code===code)?.me});
   const r=()=>{if(S.route==='group'&&!document.activeElement?.matches('input,select'))render()};
-  S.unsub=F.watch(code,{onGroup:g=>{S.group=g;r()},onReceipts:x=>{S.receipts=x;r()},onPayments:x=>{S.payments=x;r()}});
+  S.unsub=F.watch(code,{onGroup:g=>{if(!g&&S.group&&!S.deleting){S.unsub?.();forget(code);S.group=null;go('home');return toast('This group was deleted.')}S.group=g;r()},onReceipts:x=>{S.receipts=x;r()},onPayments:x=>{S.payments=x;r()}});
   F.getQR(code,S.me).then(q=>{S.myQR=q;r()}).catch(()=>{});go('group')}
 
 /* actions */
@@ -143,11 +146,14 @@ const A={
   closesheet:()=>{S.sheet=null;renderSheet();render()},
   savebill:()=>{const d=S.draft,items=d.items.filter(i=>i.name||+i.price).map(i=>({name:i.name||'Item',qty:+i.qty||1,price:+i.price||0,split:{mode:i.split.mode,w:i.split.w}}));
     if(!items.length)return toast('Add at least one item');
+    const save=()=>{F.saveReceipt(S.code,{id:d.id,title:d.title||'Bill',payer:d.payer,items,tax:+d.tax||0,service:+d.service||0,discount:+d.discount||0,ts:d.ts||Date.now()});rustle();toast('Bill saved');go('group')};
     const un=receiptTotals({items}).unassigned;
-    if(un&&!confirm(`${un} item${un>1?'s have':' has'} nobody assigned, so no one will be charged for ${un>1?'them':'it'}. Save anyway?`))return;
-    F.saveReceipt(S.code,{id:d.id,title:d.title||'Bill',payer:d.payer,items,tax:+d.tax||0,service:+d.service||0,discount:+d.discount||0,ts:d.ts||Date.now()});
-    rustle();toast('Bill saved');go('group')},
-  delbill:()=>{if(confirm('Delete this bill?')){F.delReceipt(S.code,S.draft.id);go('group')}},
+    un?ask('Some items have nobody',`${un} item${un>1?'s are':' is'} not assigned to anyone, so nobody will be charged for ${un>1?'them':'it'}.`,'Save anyway',save):save()},
+  delbill:()=>ask('Delete this bill?','Everyone’s balances will update.','Delete bill',()=>{F.delReceipt(S.code,S.draft.id);go('group');toast('Bill deleted')}),
+  yes:()=>{A.closemodal();const f=S.ok;S.ok=null;f?.()},
+  forget:b=>{const c=b.dataset.code,g=(LS('groups')||[]).find(x=>x.code===c);ask('Remove from this device?',`“${esc(g?.name||c)}” stays for everyone else. You can rejoin with code ${c}.`,'Remove',()=>{forget(c);render()})},
+  leave:()=>ask('Remove from your groups?',`You can rejoin any time with code ${S.code}.`,'Remove',()=>{S.unsub?.();forget(S.code);go('home')}),
+  delgroup:()=>ask('Delete this group?','This permanently deletes every bill and payment for everyone in the group.','Delete group',()=>{S.deleting=true;S.unsub?.();F.deleteGroup(S.code,{receipts:S.receipts.map(r=>r.id),payments:S.payments.map(p=>p.id),members:Object.keys(mem())});forget(S.code);go('home');toast('Group deleted')}),
   closemodal:()=>modal.classList.remove('on'),
   settleup:b=>{const t=S.tr[b.dataset.i];
     openModal(`<h3>Pay ${esc(nm(t.to))}</h3><p class=amtbig>${peso(t.amt,S.group.round)}</p><div id=qrbox class=mu>Loading payment QR…</div><p class=mu><small>Send the money first, then tap the button.</small></p><button class="btn wide" data-act=paid data-i=${b.dataset.i}>I’ve paid</button>`);

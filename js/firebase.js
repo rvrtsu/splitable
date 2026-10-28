@@ -1,5 +1,5 @@
 import{initializeApp}from'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
-import{initializeFirestore,persistentLocalCache,persistentMultipleTabManager,doc,collection,setDoc,getDoc,updateDoc,addDoc,deleteDoc,onSnapshot,query,orderBy}from'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+import{initializeFirestore,persistentLocalCache,persistentMultipleTabManager,doc,collection,setDoc,getDoc,updateDoc,addDoc,deleteDoc,onSnapshot,query,orderBy,writeBatch}from'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import{getAuth,signInAnonymously}from'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 
 // Paste your Firebase web app config here (Project settings > Your apps). It is safe to publish; your security rules protect the data.
@@ -51,3 +51,12 @@ export function watch(code,h){
 // Payment QR lives in Firestore as a small compressed image (no Firebase Storage needed).
 export const saveQR=(code,id,img)=>setDoc(doc(G(code),'qr',id),{img});
 export async function getQR(code,id){await authReady;const s=await getDoc(doc(G(code),'qr',id));return s.exists()?s.data().img:null}
+
+// Deletes the group and everything under it in one batch. Not awaited by the app, so it also works offline.
+export async function deleteGroup(code,{receipts,payments,members}){
+  await authReady;const g=G(code),b=writeBatch(db);
+  receipts.forEach(id=>b.delete(doc(g,'receipts',id)));
+  payments.forEach(id=>b.delete(doc(g,'payments',id)));
+  members.forEach(id=>b.delete(doc(g,'qr',id)));
+  b.delete(g);return b.commit();
+}

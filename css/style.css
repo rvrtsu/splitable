@@ -39,7 +39,6 @@ textarea{border:1.5px dotted var(--line);padding:8px;resize:vertical}
 #modal{display:grid;place-items:center}
 .card{position:relative;width:min(92vw,380px);max-height:88vh;overflow:auto;background:var(--bg);border:2px dotted var(--ink);border-radius:8px;padding:18px;text-align:center;opacity:0;transform:scale(.92);transition:transform .28s cubic-bezier(.2,1.2,.3,1),opacity .2s}
 .on>.card{opacity:1;transform:none}.card .btn{margin-top:10px}.card textarea{text-align:left}
-.qr{width:100%;max-width:280px;border:2px dotted var(--ink);padding:8px;background:#fff}
 .big{font-size:34px;font-weight:700;margin:4px 0}
 .stamp{margin:14px auto;width:max-content;border:3px double var(--acc);color:var(--acc);padding:6px 16px;font-weight:700;font-size:22px;transform:rotate(-6deg);animation:stampin .4s cubic-bezier(.3,1.5,.5,1) both}
 @keyframes stampin{from{transform:rotate(-6deg) scale(2);opacity:0}}

@@ -1,9 +1,9 @@
-# Receipt: split bills with friends
+# Splitable: split bills with friends
 
 Plain HTML, CSS and JavaScript. Firebase Firestore for sync. Hosted on GitHub Pages. No paid plan needed.
 
 ## Set up (about 10 minutes)
-1. **Firebase console** > Add project > register a Web app (</>) > copy the config into `js/firebase.js`.
+1. **Firebase console** > Add project > register a Web app (</>) > copy the config into `js/firebase-config.js`.
 2. **Authentication** > Sign-in method > turn on **Anonymous**. Settings > Authorized domains > add `YOURNAME.github.io`.
 3. **Firestore Database** > Create database (pick `asia-southeast1`) > Rules tab > paste `firestore.rules` > Publish.
 4. **GitHub**: put every file in this folder in a repo (so `index.html` is at the top), then Settings > Pages > Deploy from branch > `main` / `(root)`.
@@ -11,5 +11,8 @@ Plain HTML, CSS and JavaScript. Firebase Firestore for sync. Hosted on GitHub Pa
 
 Firebase Storage is not used. Open the app once online so it can work offline later.
 
+## Accounts
+There is no email or password. Each person gets a 6-character account code and logs in with it on any device. Keep it safe: anyone who has the code can open that account.
+
 ## Updating
-Change `V` in `sw.js` (for example `receipt-v3`) every time you redeploy, so phones refresh their cached copy.
+Change `V` in `sw.js` (for example `receipt-v6`) every time you redeploy, so phones refresh their cached copy.

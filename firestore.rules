@@ -1,11 +1,35 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{db}/documents {
+
+    function signedIn() { return request.auth != null; }
+    // Account codes: 6 characters from A-Z and 2-9 without I or O (same alphabet as logic.js).
+    function validCode(c) { return c.matches('^[A-HJ-NP-Z2-9]{6}$'); }
+    function validUser(d) {
+      return d.keys().hasOnly(['name', 'qrData', 'joinedGroups', 'createdAt'])
+        && d.name is string && d.name.size() > 0 && d.name.size() <= 40
+        && d.qrData is string && d.qrData.size() <= 900000
+        && d.joinedGroups is list && d.joinedGroups.size() <= 50
+        && d.createdAt is number;
+    }
+
+    // One document per account, fetched only by its exact code (no listing, so accounts can't be browsed or counted).
+    match /users/{account} {
+      allow get: if signedIn() && validCode(account);
+      allow create: if signedIn() && validCode(account) && validUser(request.resource.data);
+      allow update: if signedIn() && validCode(account) && validUser(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
     match /groups/{code} {
-      allow get, create, delete: if request.auth != null;
-      allow update: if request.auth != null
-        && request.resource.data.created == resource.data.created;
-      match /{sub=**} { allow read, write: if request.auth != null; }
+      allow get, create, delete: if signedIn();
+      allow update: if signedIn() && request.resource.data.created == resource.data.created;
+
+      match /receipts/{id} { allow read, write: if signedIn(); }
+      match /payments/{id} { allow read, write: if signedIn(); }
+      match /qr/{id}       { allow read, write: if signedIn(); }
+      // The history ledger can be added to and read, but entries can't be edited. (Delete is only for deleting a whole group.)
+      match /history/{id}  { allow read, create, delete: if signedIn(); }
     }
   }
 }

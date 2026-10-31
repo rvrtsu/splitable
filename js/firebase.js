@@ -31,9 +31,10 @@ export function watchGroups(codes,cb){authReady.then(()=>{
 export const stopGroups=()=>{gl.forEach(f=>f());gl.clear()};
 export const leaveGroup=(account,code)=>updateDoc(U(account),{joinedGroups:arrayRemove(code)});
 
-// The payment QR lives on the account AND inside each group the person belongs to (members.{account}.qr),
-// so everyone in the group can read it without ever reading someone else's account document.
-export function saveQR(account,img,groups){const b=writeBatch(db);b.update(U(account),{qrData:img});groups.forEach(c=>b.update(G(c),{[`members.${account}.qr`]:img}));return b.commit()}
+// The payment QR lives on the account (qrData) and is mirrored into each group the person belongs to (members.{account}.qr),
+// so everyone in a group reads it from the shared group document. The app keeps the mirrors in sync automatically.
+export const saveUserQR=(account,img)=>updateDoc(U(account),{qrData:img}); // img = '' removes it
+export const setMemberQR=(code,account,img)=>updateDoc(G(code),{[`members.${account}.qr`]:img?img:deleteField()});
 
 /* ---------- groups: members are keyed by account code (guests by g_xxxxxx) ---------- */
 export function createGroup({name,type,account,userName,qrData}){

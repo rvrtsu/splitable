@@ -1,5 +1,5 @@
 // Bump V on every deploy so phones pick up new files.
-const V='receipt-v6';
+const V='receipt-v7';
 const SHELL=['./','index.html','css/style.css','js/app.js','js/firebase.js','js/firebase-config.js','js/logic.js','manifest.json','icons/icon-192.png','icons/icon-512.png'];
 const HOSTS=['www.gstatic.com','fonts.googleapis.com','fonts.gstatic.com','cdnjs.cloudflare.com'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(V).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting())));

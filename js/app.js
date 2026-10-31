@@ -5,7 +5,7 @@ const $=s=>document.querySelector(s),app=$('#app'),sheet=$('#sheet'),modal=$('#m
 const LS=(k,v)=>v===undefined?JSON.parse(localStorage.getItem('splitable.'+k)||'null'):localStorage.setItem('splitable.'+k,JSON.stringify(v));
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>'&#'+m.charCodeAt(0)+';');
 const S={route:'home',hm:'new',tab:'bills',start:{step:'choose',code:''},account:null,user:null,groups:{},code:null,me:null,group:null,
-  receipts:[],payments:[],history:[],comments:[],billId:null,tr:[],draft:null,sheet:null,acc:{},sig:{}};
+  receipts:[],payments:[],history:[],comments:[],billId:null,tr:[],draft:null,sheet:null,acc:{},sig:{},qrTry:{}};
 const TABS=['bills','settle','history','insights','more'];
 const mem=()=>S.group?.members||{},hostId=()=>Object.keys(mem()).find(k=>mem()[k].host);
 const nm=id=>id===POT?'Group fund':mem()[id]?.name||'Someone';
@@ -50,13 +50,15 @@ const needCanvas=()=>window.html2canvas?Promise.resolve():new Promise((ok,no)=>{
 
 /* ---------- render pipeline: repaint only the region whose data changed ---------- */
 const same=(k,v,f=JSON.stringify)=>{const s=f(v);if(S.sig[k]===s)return true;S.sig[k]=s;return false}; // skip identical snapshots
-const sigGroup=g=>g?JSON.stringify({...g,members:Object.fromEntries(Object.entries(g.members||{}).map(([k,m])=>[k,{...m,qr:m.qr?m.qr.length:0}]))}):'null';
-const TABDEPS={bills:['group','receipts','payments'],settle:['group','receipts','payments'],history:['group','history'],insights:['group','receipts','payments'],more:['group','user']};
+const hash=str=>{let h=5381;for(let i=0;i<str.length;i++)h=(h*33^str.charCodeAt(i))|0;return h};
+const sigGroup=g=>g?JSON.stringify({...g,members:Object.fromEntries(Object.entries(g.members||{}).map(([k,m])=>[k,{...m,qr:m.qr?hash(m.qr):0}]))}):'null';
+const TABDEPS={bills:['group','receipts','payments'],settle:['group','receipts','payments'],history:['group','history'],insights:['group','receipts','payments'],more:['group','user','groups']};
 const dirty=new Set();let raf=0;
 const mark=(...k)=>{k.forEach(x=>dirty.add(x));raf||(raf=requestAnimationFrame(flush))}; // many snapshots in one frame = one paint
 function flush(){raf=0;if(!S.account)return;
   if(typing()){S.deferred=true;return} // never repaint under someone who is typing
   const d=[...dirty];dirty.clear();
+  if(d.includes('group')&&S.payOpen&&S.pay){const q=$('#qrbox');if(q)q.innerHTML=qrBox(S.pay)} // QR changed while Pay is open
   if(S.route==='home'){if(d.includes('user')||d.includes('groups'))paintHome();return}
   if(S.route==='edit')return;
   const deps=S.route==='bill'?['group','receipts','comments']:TABDEPS[S.tab];
@@ -170,8 +172,10 @@ const vMore=()=>{const g=S.group,ms=Object.entries(mem()),cur=g.theme||'#3E2723'
 <form data-form=clique style="margin-top:12px"><label>New clique<input name=name placeholder="Roommates" maxlength=24 required></label><div class=who style="margin:0 0 12px">${ms.map(([id,m])=>`<label class=check style="margin:0"><input type=checkbox name=m value=${id}> ${esc(m.name)}</label>`).join('')}</div><button class="btn sm">Save clique</button></form>`;
   const color=`<p class=mu><small>Shows on Home so you can tell groups apart.</small></p><div class=swatches>${GROUP_COLORS.map(([n,c])=>`<button class="sw ${cur.toLowerCase()===c.toLowerCase()?'on':''}" style="background:${accent(c,dark())}" data-act=color data-c="${c}" aria-label="${n}"></button>`).join('')}
 <label class="sw cust" aria-label="Pick a custom color"><input type=color id=gcolor value="${isHex(cur)?cur:'#3E2723'}"></label></div>`;
-  const qr=`<p class=mu><small>Friends see it when they tap Pay. It’s copied into every group you’re in.</small></p>${S.user?.qrData?`<img class=qr src="${S.user.qrData}" alt="Your payment QR">`:''}
-<label class="btn ghost wide" for=qr style="margin-top:12px">${S.user?.qrData?'Replace QR':'Upload GCash, Maya or bank QR'}</label><input id=qr type=file accept="image/*" hidden>`;
+  const joined=(S.user?.joinedGroups||[]).filter(c=>S.groups[c]?.members?.[S.account]),mine=S.user?.qrData||'',okN=joined.filter(c=>(S.groups[c].members[S.account].qr||'')===mine).length;
+  const qr=`<p class=mu><small>Friends see it when they tap Pay. It stays up to date in every group you’re in.</small></p>${mine?`<img class=qr src="${mine}" alt="Your payment QR">`:''}
+${joined.length&&(mine||okN<joined.length)?`<p class=mu><small>${okN===joined.length?`Up to date in ${okN} group${okN>1?'s':''}.`:`Updating your groups… ${okN} of ${joined.length} done.`}</small></p>`:''}
+<div class=row2 style="margin-top:12px"><label class="btn ghost" for=qr>${mine?'Replace QR':'Upload GCash, Maya or bank QR'}</label>${mine?'<button class="btn ghost danger-t" data-act=removeqr>Remove</button>':''}</div><input id=qr type=file accept="image/*" hidden>`;
   const opts=host?'<p class=mu><small>Deleting removes every bill and payment for everyone in the group.</small></p><button class="btn danger wide" data-act=delgroup>Delete group</button>'
     :'<p class=mu><small>This only removes the group from your account. You can rejoin with the code.</small></p><button class="btn ghost wide" data-act=leave>Remove from my groups</button>';
   return`<h3 class=sec>Group</h3>
@@ -262,7 +266,7 @@ const rebalance=it=>{const sp=it.split,ids=Object.keys(sp.w),n=ids.length||1,t=i
 function openGroup(code,tab='bills'){S.unsub?.();S.unsubC?.();Object.assign(S,{code,deleting:false,group:null,receipts:[],payments:[],history:[],tab,billId:null,sig:{}});
   S.unsub=F.watch(code,{
     onGroup:g=>{if(!g&&S.group&&!S.deleting){S.unsub?.();S.group=null;go('home');return toast('This group was deleted.')}
-      if(same('group',g,sigGroup))return;S.group=g;mark('group')},
+      syncQR(code,g);if(same('group',g,sigGroup))return;S.group=g;mark('group')},
     onReceipts:x=>{if(!same('receipts',x)){S.receipts=x;mark('receipts')}},
     onPayments:x=>{if(!same('payments',x)){S.payments=x;mark('payments')}},
     onHistory:x=>{if(!same('history',x)){S.history=x;mark('history')}}});
@@ -271,12 +275,12 @@ function startSession(code){
   S.unsubUser?.();F.stopGroups();
   Object.assign(S,{account:code,me:code,user:null,groups:{},route:'home',sig:{}});render();
   S.unsubUser=F.watchUser(code,u=>{
-    const first=!S.user;if(!first&&same('user',u))return;S.user=u;same('user',u);F.watchGroups(u.joinedGroups,onGroupSnap);
+    const first=!S.user;if(!first&&same('user',u))return;S.user=u;same('user',u);for(const c in S.groups)syncQR(c,S.groups[c]);F.watchGroups(u.joinedGroups,onGroupSnap);
     if(first){const j=S.joinCode,d=S.deep;S.joinCode=S.deep='';if(j||d)history.replaceState(null,'',location.pathname);
       if(j)doJoin(j);else if(d)u.joinedGroups.includes(d)?openGroup(d,'settle'):doJoin(d,'settle')}
     mark('user')},()=>{toast('That account no longer exists.');logout()})}
 function onGroupSnap(c,data,fromCache){ // one live listener per joined group keeps the Home list in sync
-  if(data){if(!same('g'+c,data,sigGroup)){S.groups[c]=data;mark('groups')}}
+  if(data){syncQR(c,data);if(!same('g'+c,data,sigGroup)){S.groups[c]=data;mark('groups')}}
   else{delete S.groups[c];if(!fromCache&&S.user?.joinedGroups.includes(c))F.leaveGroup(S.account,c);mark('groups')}} // deleted by its host
 function logout(){S.unsub?.();S.unsubC?.();S.unsubUser?.();F.stopGroups();localStorage.removeItem('splitable.account');
   Object.assign(S,{account:null,me:null,user:null,groups:{},route:'home',start:{step:'choose',code:''},group:null,receipts:[],payments:[],history:[],sig:{}});render()}
@@ -320,6 +324,15 @@ async function makeSummary(theme){
     openModal(`<h3>Your summary</h3><img class=pubprev src="${S.pubURL}" alt="Summary image preview"><div class=row2><button class=btn data-act=pubsave>Save image</button>${navigator.canShare?.({files:[S.pub]})?'<button class="btn ghost" data-act=pubshare>Share…</button>':''}</div>`);
   }catch{toast('Couldn’t make the image. Check your connection and try again.')}
   finally{el?.remove();busy(false)}}
+
+/* ---------- payment QR: one source of truth (the account), mirrored into every group automatically ---------- */
+function syncQR(code,g){const me=g?.members?.[S.account];if(!me||!S.user)return;
+  const want=S.user.qrData||'';if(want===(me.qr||''))return; // already up to date
+  const key=code+':'+hash(want),n=S.qrTry[key]||0;if(n>=2)return;S.qrTry[key]=n+1; // at most two tries, so a failing write can’t loop
+  F.setMemberQR(code,S.account,want).catch(()=>{})}
+const qrBox=t=>{const toFund=t.to===POT,fromFund=t.from===POT,qr=fromFund?null:toFund?mem()[hostId()]?.qr:mem()[t.to]?.qr,w=toFund?(hostId()?nm(hostId()):'The host'):nm(t.to);
+  return qr?`<img class=qr src="${qr}" alt="Payment QR for ${esc(w)}"><p class=mu><small>Scan with GCash, Maya or your bank app, then record the payment.</small></p>`
+  :`<p class=mu>${fromFund?'The fund holder sends this by GCash, Maya or cash.':`${esc(w)} hasn’t added a payment QR yet. They can add one under Group.`}</p>`};
 
 /* ---------- actions ---------- */
 const A={
@@ -384,19 +397,19 @@ const A={
   leave:()=>ask('Remove from your groups?',`You can rejoin any time with code ${S.code}.`,'Remove',()=>{S.unsub?.();F.leaveGroup(S.account,S.code);go('home')}),
   delgroup:()=>ask('Delete this group?','This permanently deletes every bill and payment for everyone in the group.','Delete group',()=>{S.deleting=true;S.unsub?.();S.unsubC?.();
     F.deleteGroup(S.code,{receipts:S.receipts.map(r=>r.id),payments:S.payments.map(p=>p.id),history:S.history.map(h=>h.id),account:S.account});go('home');toast('Group deleted')}),
-  closemodal:()=>modal.classList.remove('on'),
+  closemodal:()=>{S.payOpen=false;modal.classList.remove('on')},
+  removeqr:()=>ask('Remove your payment QR?','Friends won’t see a QR when they pay you. You can upload a new one any time.','Remove',()=>F.saveUserQR(S.account,'').then(()=>toast('QR removed'),e=>toast(`Couldn’t remove it (${e.code||e.message})`))),
   /* money */
   contrib:()=>openModal(`<h3>Add to the group fund</h3><label>Amount<input id=fundamt type=number inputmode=decimal step=any min=0 placeholder="500" autofocus></label><p class=mu><small>Hand the cash to whoever holds the fund, or send it to the host’s QR. This records your contribution.</small></p><button class="btn wide" data-act=contribgo>Add to fund</button>`),
   contribgo:()=>{const v=Math.round((+$('#fundamt').value||0)*100);if(v<=0)return toast('Enter an amount.');
     F.recordPayment(S.code,{from:S.me,to:POT,amt:v});log(`${S.user.name} added ${peso(v)} to the group fund`);ding();A.closemodal();toast('Added to the fund')},
   settleup:b=>{const t=S.tr[b.dataset.i],w=S.group.round,toFund=t.to===POT,fromFund=t.from===POT;S.pay=t;
-    const qr=fromFund?null:toFund?mem()[hostId()]?.qr:mem()[t.to]?.qr; // the receiver’s QR comes straight from the shared group document
+    S.payOpen=true;
     const who=toFund?'the group fund':nm(t.to);
     openModal(`<h3>${fromFund?'Pay out from':'Pay'} ${esc(fromFund?nm(t.to):who)}</h3><p class=mu><small>${esc(nm(t.from))} ${fromFund?'pays':'owes'}</small></p><p class=amtbig>${peso(t.amt,w)}</p>
 <label>Amount now<input id=payamt type=number inputmode=decimal step=any min=0 value="${(t.amt/100).toFixed(2)}"></label>
 <p class=mu><small>Paying only part of it? Change the amount. The rest stays on the balance.</small></p>
-${qr?`<img class=qr src="${qr}" alt="Payment QR for ${esc(who)}"><p class=mu><small>Scan with GCash, Maya or your bank app, then record the payment.</small></p>`
-:`<p class=mu>${fromFund?'The fund holder sends this by GCash, Maya or cash.':`${esc(toFund?(hostId()?nm(hostId()):'The host'):nm(t.to))} hasn’t added a payment QR yet. They can add one under Group.`}</p>`}
+<div id=qrbox>${qrBox(t)}</div>
 <button class="btn wide" data-act=paid>Record payment</button>`)},
   paid:()=>{const t=S.pay,w=S.group.round,v=Math.round((+$('#payamt').value||0)*100);
     if(v<=0)return toast('Enter an amount.');if(v>t.amt)return toast(`That’s more than ${peso(t.amt,w)}.`);
@@ -452,9 +465,10 @@ document.addEventListener('input',e=>{const t=e.target,d=S.draft;if(t.classList.
   else if(t.dataset.w!=null&&S.sheet!=null){sheetSp().w[t.dataset.w]=t.value;chk();updTotals()}});
 document.addEventListener('change',e=>{const t=e.target,f=t.files?.[0];
   if(t.id==='gcolor')setColor(t.value);
-  if(t.id==='qr'&&f){toast('Saving QR…');
-    shrink(f).then(img=>{ // copy the QR into every group you belong to, so everyone there can read it from the group document
-      F.saveQR(S.account,img,S.user.joinedGroups.filter(c=>S.groups[c]?.members?.[S.account]));S.user.qrData=img;S.sig.user='';paintView();toast('QR saved')}).catch(()=>toast('Couldn’t read that image.'))}});
+  if(t.id==='qr'&&f){t.value='';toast('Saving QR…');
+    shrink(f).then(img=>timeout(F.saveUserQR(S.account,img),8000).then(()=>'ok',e=>{if(e.message==='timeout')return'later';throw e}) // offline writes stay queued
+      .then(r=>toast(r==='later'?'Saved on this device. It syncs when you’re online.':'QR saved. Your groups update automatically.')))
+      .catch(e=>toast(`Couldn’t save the QR (${e.code||e.message})`))}});
 
 /* ---------- start ---------- */
 Object.keys(localStorage).filter(k=>k.startsWith('rc.')).forEach(k=>localStorage.removeItem(k)); // leftovers from old versions

@@ -11,13 +11,26 @@
 <meta name="apple-mobile-web-app-title" content="Splitable">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;700&family=Courier+Prime:wght@400;700&display=swap">
 <link rel="stylesheet" href="css/style.css">
 <script>try{document.documentElement.dataset.theme=JSON.parse(localStorage.getItem('splitable.theme')||'""')||''}catch(e){}</script>
 </head><body>
 <div id="net">Offline. Changes are saved on this device and sync when you reconnect.</div>
 <div id="app"><noscript>Splitable needs JavaScript to run.</noscript></div>
-<div id="sheet"></div><div id="modal"></div><div id="toast" role="status"></div>
+
+<!-- floating bottom navigation (shown inside a group) -->
+<nav id="nav" class="nav hide" aria-label="Group sections">
+  <i class="ind"></i>
+  <button class="nv" data-act="tab" data-k="bills"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"/></svg><span>Home</span></button>
+  <button class="nv" data-act="tab" data-k="settle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h13l-3-3M19 16H6l3 3"/></svg><span>Settle</span></button>
+  <button class="nv" data-act="tab" data-k="history"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg><span>History</span></button>
+  <button class="nv" data-act="tab" data-k="insights"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 20v-7M12 20V5M18 20v-10"/></svg><span>Insights</span></button>
+  <button class="nv" data-act="tab" data-k="more"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.5a3 3 0 0 1 0 5.5M17.5 14.5A5.5 5.5 0 0 1 20.5 19"/></svg><span>Group</span></button>
+</nav>
+
+<div id="sheet"></div><div id="modal"></div>
+<div id="busy" class="busy" hidden><span class="spin"></span><p id="busymsg">Working…</p></div>
+<div id="toast" role="status"></div>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script type="module" src="js/app.js"></script>
 </body></html>

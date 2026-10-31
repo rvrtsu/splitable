@@ -25,9 +25,12 @@ service cloud.firestore {
       allow get, create, delete: if signedIn();
       allow update: if signedIn() && request.resource.data.created == resource.data.created;
 
-      match /receipts/{id} { allow read, write: if signedIn(); }
+      match /receipts/{id} {
+        allow read, write: if signedIn();
+        // Bill comments and disputes: can be added and read, never edited.
+        match /comments/{cid} { allow read, create, delete: if signedIn(); }
+      }
       match /payments/{id} { allow read, write: if signedIn(); }
-      match /qr/{id}       { allow read, write: if signedIn(); }
       // The history ledger can be added to and read, but entries can't be edited. (Delete is only for deleting a whole group.)
       match /history/{id}  { allow read, create, delete: if signedIn(); }
     }

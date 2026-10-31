@@ -1,5 +1,6 @@
 // Pure money logic. All amounts are integer centavos so nothing drifts.
 const c=n=>Math.round((+n||0)*100);
+export const POT='POT'; // the Group Fund behaves like one more participant
 
 // Split `total` across weights, handing leftover centavos to the largest remainders.
 export function allocate(total,w){
@@ -10,15 +11,17 @@ export function allocate(total,w){
   raw.sort((a,b)=>(b[1]-Math.floor(b[1]))-(a[1]-Math.floor(a[1]))).slice(0,left).forEach(([i])=>out[i]++);
   return out;
 }
-const weights=it=>{const sp=it.split||{},o={};
-  for(const id in sp.w||{}){const v=sp.mode==='equal'?1:+sp.w[id];if(v>0)o[id]=v}return o};
+// equal = 1 each; percent, shares (ratio) and exact amounts are all just proportional weights
+const weights=sp=>{const o={};for(const id in sp?.w||{}){const v=sp.mode==='equal'?1:+sp.w[id];if(v>0)o[id]=v}return o};
+// Tap-to-claim bills keep claims separately ({itemIndex:{memberId:true}}) so two people claiming at once never overwrite each other.
+export const splitOf=(r,it,i)=>r.claimMode?{mode:'equal',w:r.claims?.[i]||{}}:it.split;
 
 // Who owes what on one bill. Tax and service charge are shared in proportion to each person's own items.
 export function receiptTotals(r){
   const sub={};let items=0,unassigned=0;
-  (r.items||[]).forEach(it=>{
+  (r.items||[]).forEach((it,i)=>{
     const t=c(it.qty*it.price);items+=t;
-    const a=allocate(t,weights(it));
+    const a=allocate(t,weights(splitOf(r,it,i)));
     if(!Object.keys(a).length)unassigned++;
     for(const k in a)sub[k]=(sub[k]||0)+a[k];
   });
@@ -128,6 +131,21 @@ export function accent(color,dark){
     if(!dark&&L>.16)h=mix(h,'#000000',.15);else if(dark&&L<.25)h=mix(h,'#ffffff',.15);else break;
   }
   return h;
+}
+
+export function fmtDur(ms){const m=Math.round(ms/60000);if(m<1)return'under a minute';if(m<60)return m+' min';const h=Math.round(m/60);return h<48?h+' hr':Math.round(h/24)+' days'}
+// "Wrapped" stats. Fastest payer = shortest average time between the latest bill and each of their payments.
+export function wrapped(rs,ps){
+  const L=ledger(rs,ps),ids=Object.keys(L).filter(k=>k!==POT);
+  const best=f=>ids.reduce((b,k)=>!b||f(k)>f(b)?k:b,null);
+  const top=best(k=>L[k].paid),big=best(k=>L[k].cost);
+  const times=rs.map(r=>r.ts||0).sort((a,b)=>a-b),dt={};
+  ps.forEach(p=>{if(p.from===POT)return;const before=times.filter(t=>t<=p.ts).pop();if(before!=null)(dt[p.from]??=[]).push(p.ts-before)});
+  let fast=null;for(const k in dt){const ms=dt[k].reduce((s,x)=>s+x,0)/dt[k].length;if(!fast||ms<fast.ms)fast={id:k,ms}}
+  const by={};rs.forEach(r=>{if(r.by)by[r.by]=(by[r.by]||0)+1});
+  const boss=Object.entries(by).sort((a,b)=>b[1]-a[1])[0];
+  return{bills:rs.length,total:rs.reduce((s,r)=>s+receiptTotals(r).total,0),tags:spendByTag(rs),fast,
+    top:top&&L[top].paid>0?{id:top,amt:L[top].paid}:null,big:big&&L[big].cost>0?{id:big,amt:L[big].cost}:null,boss:boss?{id:boss[0],n:boss[1]}:null};
 }
 
 export function nudgeText({from,to,amt,tone='funny',group,link}){
